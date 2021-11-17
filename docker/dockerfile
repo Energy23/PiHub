@@ -1,0 +1,93 @@
+#Download base image ubuntu 16.04
+FROM ubuntu:18.04
+
+USER root
+
+RUN apt-get update
+RUN apt-get -y install python3-pip \
+        npm \
+        nodejs \
+        vim \
+        nano
+ # Update npm
+RUN npm i -g npm
+# Dependencies
+RUN apt-get -y install build-essential libssl-dev libffi-dev python3-dev
+ # Update pip
+RUN apt-get -y install python3-pip
+RUN pip3 install --upgrade pip
+
+
+RUN npm install -g configurable-http-proxy
+RUN pip3 install jupyterhub
+RUN pip3 install --upgrade notebook
+
+ #Upgrade Jupyter
+RUN pip3 install jupyter --upgrade
+RUN pip3 install notebook --upgrade
+RUN pip3 install jupyterlab --upgrade
+RUN pip3 install jupyterhub --upgrade
+RUN pip3 install jupyterhub-firstuseauthenticator
+# Install Python 3.7 for packages
+RUN apt-get -y install python3.7
+# Install Packages
+RUN python3.7 -m pip install 'cloudpickle' 
+RUN python3.7 -m pip install 'cython' 
+RUN python3.7 -m pip install 'dask' 
+RUN python3.7 -m pip install 'dill' 
+
+RUN apt-get -y install zlib1g-dev
+RUN apt-get -y install libatlas-base-dev 
+
+RUN pip3 install 'numpy'
+RUN apt-get -y install libxml2 libxslt-dev libjpeg-dev  
+RUN pip3 install 'bokeh' 
+RUN pip3 install 'ipywidgets'  
+RUN pip3 install 'numexpr' 
+RUN pip3 install 'pandas' 
+RUN pip3 install 'patsy' 
+RUN pip3 install 'protobuf' 
+#RUN pip3 instal 'seaborn' 
+RUN pip3 install 'widgetsnbextension'
+RUN pip3 install 'nbpresent' 
+RUN pip3 install 'nbautoeval' 
+RUN pip3 install 'nbgrader' 
+RUN pip3 install 'jupyterlab_code_formatter' 
+RUN pip3 install 'black' 
+RUN pip3 install 'jupyter-contrib_nbextensions' 
+# Install Git
+RUN apt-get -y install git
+# Install Cufflinks
+RUN pip install git+git://github.com/santosjorge/cufflinks.git#egg=cufflinks -U
+
+# Install dependencies for extensions
+RUN pip3 install 'jupyter_contrib_nbextensions' \
+        'jupyter_nbextensions_configurator'
+RUN jupyter contrib nbextension install --sys-prefix
+RUN jupyter nbextensions_configurator enable --sys-prefix
+
+RUN jupyter nbextension enable execution_dependencies/execution_dependencies
+RUN jupyter nbextension enable init_cell/main
+RUN jupyter contrib nbextension install --sys-prefix
+
+
+RUN npm cache clean --force
+RUN rm -rf $CONDA_DIR/share/jupyter/lab/staging
+RUN rm -rf /home/$NB_USER/.cache/yarn
+RUN rm -rf /home/$NB_USER/.node-gyp
+RUN rm -rf /home/$NB_USER/.cache/pip
+
+RUN pip3 install jupyterhub-idle-culler
+
+RUN mkdir -p /opt/notebooks
+RUN chmod 755 /opt/notebooks
+
+EXPOSE 8000
+RUN mkdir -p /srv/jupyterhub/
+WORKDIR /srv/jupyterhub/
+COPY jupyterhub_config.py /srv/jupyterhub/
+COPY admins.txt /srv/jupyterhub/
+
+ENTRYPOINT ["/usr/local/bin/jupyterhub"]
+#CMD [" -f /srv/jupyterhub/config.py"]
+
