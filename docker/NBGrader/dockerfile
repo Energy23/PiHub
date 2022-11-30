@@ -1,0 +1,135 @@
+FROM ubuntu:20.04
+ARG DEBIAN_FRONTEND=noninteractive
+LABEL maintainer="DDI UPB Andreas Gödecke <andyg@campus.upb.de>"
+
+USER root
+# Set Git url if not GitHub
+ENV gitlab_url="https://git.cs.uni-paderborn.de"
+
+RUN apt-get update
+RUN apt-get update --fix-missing
+RUN apt-get -y install python3.6 \
+        npm \
+        nodejs \
+        vim \
+        nano \
+	curl
+# Update npm and NodeJS
+RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash
+RUN apt-get upgrade -y
+RUN apt-get install --only-upgrade npm
+RUN apt-get -y install --only-upgrade nodejs
+RUN npm cache clean -f
+RUN npm install -g npm@latest
+RUN npm i -g npm
+
+# Update pip
+RUN apt-get -y install python3-pip
+RUN pip3 install --upgrade pip
+
+RUN npm install -g configurable-http-proxy
+RUN pip3 install jupyterhub==1.5.0
+RUN pip3 install --upgrade notebook
+
+# Install Git oAuth
+RUN python3 -m pip install oauthenticator
+RUN pip3 install jupyterhub-firstuseauthenticator
+
+# Install Packages
+RUN pip3 install \
+    'bokeh' \
+    'cloudpickle' \
+    'cython' \
+    'dask' \
+    'dill' \
+    'ipywidgets' \
+    'ipympl'\
+    'matplotlib' \
+    'numba' \
+    'numexpr' \
+    'pandas' \
+    'patsy' \
+    'protobuf' \
+    'scikit-image' \
+    'scikit-learn' \
+    'scipy' \
+    'seaborn' \
+    'sqlalchemy' \
+    'statsmodels' \
+    'sympy' \
+    'vincent' \
+    'widgetsnbextension'\
+    'xlrd' \
+    'nbpresent' \
+    'nbautoeval' \
+    'nbgrader' \
+    'jupyterlab_code_formatter' \
+    'black' \
+    'jupyter-contrib_nbextensions' \
+    'jdc' \
+    'cufflinks' \
+    'matlab_kernel'
+
+# Install Git
+RUN apt-get -y install git
+
+
+# Install dependencies for extensions
+RUN pip3 install 'jupyter_contrib_nbextensions' \
+        'jupyter_nbextensions_configurator'
+RUN jupyter contrib nbextension install --user
+RUN jupyter nbextensions_configurator enable --user
+
+RUN jupyter nbextension enable execution_dependencies/execution_dependencies
+RUN jupyter nbextension enable init_cell/main
+RUN jupyter contrib nbextension install --sys-prefix
+
+# Cleanup
+RUN npm cache clean --force
+RUN rm -rf $CONDA_DIR/share/jupyter/lab/staging
+RUN rm -rf /home/$NB_USER/.cache/yarn
+RUN rm -rf /home/$NB_USER/.node-gyp
+RUN rm -rf /home/$NB_USER/.cache/pip
+
+RUN pip3 install jupyterhub-idle-culler
+
+#Begin NBGrader config
+RUN useradd -ms /bin/bash grader
+USER grader
+RUN mkdir /tmp/exchange
+RUN chmod -R 0700 /home/grader
+
+USER root
+COPY nbgrader_config.py /usr/etc/jupyter/
+
+# Install nbgrader and enable
+RUN jupyter nbextension install --sys-prefix --py nbgrader --overwrite
+RUN jupyter nbextension enable --sys-prefix --py nbgrader
+RUN jupyter serverextension enable --sys-prefix --py nbgrader
+#Disable Extensions for all users
+RUN jupyter nbextension disable --sys-prefix create_assignment/main
+
+RUN jupyter nbextension disable --sys-prefix formgrader/main --section=tree
+RUN jupyter serverextension disable --sys-prefix nbgrader.server_extensions.formgrader
+
+RUN jupyter nbextension disable --sys-prefix course_list/main --section=tree
+RUN jupyter serverextension disable --sys-prefix nbgrader.server_extensions.course_list
+
+# Enable Extensions for grader
+USER grader
+RUN jupyter nbextension enable --user create_assignment/main
+
+RUN jupyter nbextension enable --user formgrader/main --section=tree
+RUN jupyter serverextension enable --user nbgrader.server_extensions.formgrader
+
+RUN jupyter nbextension enable --user course_list/main --section=tree
+RUN jupyter serverextension enable --user nbgrader.server_extensions.course_list
+# END NBGrader
+
+USER root
+
+EXPOSE 8000
+RUN mkdir -p /srv/jupyterhub/
+WORKDIR /srv/jupyterhub/
+COPY jupyterhub_config.py /srv/jupyterhub/
+ENTRYPOINT ["/usr/local/bin/jupyterhub"]

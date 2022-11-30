@@ -1,0 +1,102 @@
+FROM ubuntu:20.04
+LABEL maintainer="DDI UPB Andreas Gödecke <andyg@campus.upb.de>"
+ARG DEBIAN_FRONTEND=noninteractive
+
+USER root
+# Set Git url if not GitHub
+ENV gitlab_url="https://git.cs.uni-paderborn.de"
+
+RUN apt-get update
+RUN apt-get update --fix-missing
+RUN apt-get -y install python3.9 \
+        npm \
+        nodejs \
+        vim \
+        nano \
+	curl
+# Update npm and NodeJS
+RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash
+RUN apt-get upgrade -y
+RUN apt-get install --only-upgrade npm
+RUN apt-get -y install --only-upgrade nodejs
+RUN npm cache clean -f
+RUN npm install -g npm@latest
+RUN npm i -g npm
+
+# Update pip
+RUN apt-get -y install python3-pip
+RUN pip3 install --upgrade pip
+
+RUN npm install -g configurable-http-proxy
+RUN pip3 install jupyterhub
+RUN pip3 install --upgrade notebook
+
+# Install Git oAuth
+RUN python3 -m pip install oauthenticator
+
+# Upgrade Jupyter
+RUN pip3 install jupyter --upgrade
+RUN pip3 install notebook --upgrade
+RUN pip3 install jupyterlab --upgrade
+RUN pip3 install jupyterhub --upgrade
+RUN pip3 install jupyterhub-firstuseauthenticator
+
+# Install Packages
+RUN pip3 install \
+    'bokeh' \
+    'cloudpickle' \
+    'cython' \
+    'dask' \
+    'dill' \
+    'ipywidgets' \
+    'ipympl'\
+    'matplotlib' \
+    'numba' \
+    'numexpr' \
+    'pandas' \
+    'patsy' \
+    'protobuf' \
+    'scikit-image' \
+    'scikit-learn' \
+    'scipy' \
+    'seaborn' \
+    'sqlalchemy' \
+    'statsmodels' \
+    'sympy' \
+    'vincent' \
+    'widgetsnbextension'\
+    'xlrd' \
+    'nbpresent' \
+    'nbautoeval' \
+    'nbgrader' \
+    'jupyterlab_code_formatter' \
+    'black' \
+    'jupyter-contrib_nbextensions' \
+    'jdc' \
+    'tensorflow' \
+	'cufflinks' \
+    'matlab_kernel'
+
+# Install Git
+RUN apt-get -y install git
+
+# Cleanup
+RUN npm cache clean --force
+RUN rm -rf $CONDA_DIR/share/jupyter/lab/staging
+RUN rm -rf /home/$NB_USER/.cache/yarn
+RUN rm -rf /home/$NB_USER/.node-gyp
+RUN rm -rf /home/$NB_USER/.cache/pip
+
+RUN pip3 install jupyterhub-idle-culler
+
+USER root
+
+# Enable nbgitpuller
+RUN pip3 install nbgitpuller
+RUN jupyter serverextension enable nbgitpuller --sys-prefix
+
+EXPOSE 8000
+RUN mkdir -p /srv/jupyterhub/
+WORKDIR /srv/jupyterhub/
+COPY jupyterhub_config.py /srv/jupyterhub/
+ENTRYPOINT ["/usr/local/bin/jupyterhub"]

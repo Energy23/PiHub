@@ -4,8 +4,10 @@ from tkinter import ttk
 from tkinter import scrolledtext, filedialog
 import docker
 import platform
+import subprocess
 #import netifaces as ni
 from hostapdconf.parser import HostapdConf
+from numpy import c_
 
 
 class DockerController:
@@ -45,6 +47,13 @@ class DockerController:
             self.client.containers.get(id).start()
         else:
             self.client.containers.get(id).stop()
+        
+    def delContainer(self, id):
+        if self.client.containers.get(id).status == "exited":
+            self.client.containers.get(id).remove()
+        else:
+            self.client.containers.get(id).stop()
+            self.client.containers.get(id).remove()
     
     def run_cmd(self, name, cmd):
         return self.client.containers.get(name).exec_run(cmd, stream=True)[1]
@@ -71,8 +80,8 @@ class DockerController:
         return os.system(cp) 
 
     def new_classroom(self, name, image, port, admin, *args):
-        pass
-
+        os.system('docker run -d --name '+name +' -p ' +str(port) +':8000 ' +image)
+        
 class WifiController:
     def __init__(self):
         self.hostapd = HostapdConf('/run/media/andy/Data/git/PiHub/piconfig/hostapd.conf')
@@ -153,7 +162,7 @@ class View:
         ttk.Label(self.tab_start, text='Image').grid(column=2, row=1, sticky='w')
         ttk.Label(self.tab_start, text='Status').grid(column=3, row=1, sticky='w')
         ttk.Label(self.tab_start, text='Start/Stop').grid(column=4, row=1, padx=5, sticky='e')
-
+        lc=0
         container_all = dockerc.get_all()
         for c,e in enumerate(container_all,start=2):
             ttk.Label(self.tab_start, text=e['name']).grid(column=0, row=c, pady=5, sticky="w")
@@ -161,20 +170,21 @@ class View:
             ttk.Label(self.tab_start, text=e['image']).grid(column=2, row=c, pady=5, sticky='w')
             ttk.Label(self.tab_start, text=e['status']).grid(column=3, row=c, pady=5, sticky='w')
             ttk.Button(self.tab_start, text="Start/Stop", command=lambda e=e: self.gui.toggleContainer(e['id'])).grid(column=4, row=c, pady=5, padx=5, sticky='e')
+            lc=c
 
-        ttk.Label(self.tab_start, text="Access Point Settings", font='Helvetica 16 bold').grid(column=0, row=c+2, pady=10, columnspan=5)
+        ttk.Label(self.tab_start, text="Access Point Settings", font='Helvetica 16 bold').grid(column=0, row=lc+2, pady=10, columnspan=5)
         
-        ttk.Label(self.tab_start, text="WiFi Name").grid(column=0, row=c+3, pady=5, sticky='w')
+        ttk.Label(self.tab_start, text="WiFi Name").grid(column=0, row=lc+3, pady=5, sticky='w')
         self.wifi_ssid = tk.StringVar(value=wific.getWifiName())
-        ttk.Label(self.tab_start, textvariable=self.wifi_ssid).grid(column=3, row=c+3, pady=5, padx=5, sticky='w', columnspan=2)
+        ttk.Label(self.tab_start, textvariable=self.wifi_ssid).grid(column=3, row=lc+3, pady=5, padx=5, sticky='w', columnspan=2)
 
-        ttk.Label(self.tab_start, text="WiFi Password").grid(column=0, row=c+4, pady=5, sticky='w')
+        ttk.Label(self.tab_start, text="WiFi Password").grid(column=0, row=lc+4, pady=5, sticky='w')
         self.wifi_pw = tk.StringVar(value=self.wific.getWifiPw())
-        ttk.Label(self.tab_start, textvariable=self.wifi_pw).grid(column=3, row=c+4, pady=5, padx=5, sticky='w', columnspan=2)
+        ttk.Label(self.tab_start, textvariable=self.wifi_pw).grid(column=3, row=lc+4, pady=5, padx=5, sticky='w', columnspan=2)
 
-        ttk.Label(self.tab_start, text="Classroom URL").grid(column=0, row=c+5, pady=5, sticky='w')
+        ttk.Label(self.tab_start, text="Classroom URL").grid(column=0, row=lc+5, pady=5, sticky='w')
         self.pi_adrr = tk.StringVar(value="http://pi.lan")
-        ttk.Label(self.tab_start, textvariable=self.pi_adrr).grid(column=3, row=c+5, pady=5, padx=5, sticky='w', columnspan=2)
+        ttk.Label(self.tab_start, textvariable=self.pi_adrr).grid(column=3, row=lc+5, pady=5, padx=5, sticky='w', columnspan=2)
 
     def draw_config(self, dockerc):
         for child in self.tab_config.winfo_children():
@@ -228,6 +238,8 @@ class View:
         ttk.Label(self.tab_config, text="Open bash inside Classroom").grid(column=0, row=8, pady=5, sticky='w')
         ttk.Button(self.tab_config, text="Open", command = lambda: self.open_terminal(self.active.get())).grid(column=2, row=8, pady=5, sticky='e')
 
+
+
     def draw_new_class(self, dockerc):
         for child in self.tab_new_class.winfo_children():
             child.destroy()
@@ -236,8 +248,8 @@ class View:
         # Select image
         ttk.Label(self.tab_new_class, text="Select Image").grid(column=0, row=0, pady=5, sticky='w')
         images = self.dockerc.get_images()
-        active = tk.StringVar(self.tab_new_class)
-        ttk.OptionMenu(self.tab_new_class, active, "Select Image", *images).grid(column=1, row=0, pady=5, sticky='e')
+        self.activeImage = tk.StringVar(self.tab_new_class)
+        ttk.OptionMenu(self.tab_new_class, self.activeImage, "Select Image", *images).grid(column=1, row=0, pady=5, sticky='e')
     
         # Choose name
         ttk.Label(self.tab_new_class, text="Classroom Name").grid(column=0, row=1, pady=5, sticky='w')
@@ -257,14 +269,30 @@ class View:
         ttk.Label(self.tab_new_class, text="Admin Username").grid(column=0, row=4, pady=5, sticky='w')
         self.admin_name = tk.StringVar(self.tab_new_class)
         ttk.Entry(self.tab_new_class, textvariable=self.admin_name, width=20).grid(column=1, row=4, pady=5, sticky='e')
-        
+
+        # Start
+        ttk.Button(self.tab_new_class, text="Start", command=lambda: self.gui.new_classroom(self.c_name.get(), self.activeImage.get(), self.port.get(), self.admin_name.get() )).grid(column=1, row=8, pady=5, sticky='e')
+
     def draw_advanced(self, dockerc):
         for child in self.tab_advanced.winfo_children():
             child.destroy()
         self.tab_advanced.columnconfigure(0, weight=100)
         self.tab_advanced.columnconfigure(1, weight=1)
         self.tab_advanced.columnconfigure(2, weight=1)
-        
+
+        running = []
+        running.clear()
+        for e in dockerc.get_all():
+            running.append(e['name'])
+
+        ttk.Label(self.tab_advanced, text="Select Classroom").grid(column=0, row=0, pady=5, sticky='w')
+        self.activeADV = tk.StringVar(self.tab_advanced)
+        self.d_active = ttk.OptionMenu(self.tab_advanced, self.activeADV, "Select Item" ,*running).grid(column=1,pady=5, row=0, sticky='e', columnspan=2)
+
+        # Remove selected Container
+        ttk.Label(self.tab_advanced, text="Delete selected Classroom").grid(column=0, row=1, pady=5, sticky='w')
+        ttk.Button(self.tab_advanced, text="Delete", command = lambda: self.gui.rmClassroom(self.activeADV.get())).grid(column=2, row=1, pady=5, sticky='e')
+
         # TODO Make Snapshot of running container
 
     def draw_network(self, dockerc):
@@ -376,10 +404,19 @@ class JupyterGui:
     def redraw(self):
         self.view.draw_start_view(self.dockercontroller, self.wificontroller)
         self.view.draw_config(self.dockercontroller)
+        self.view.draw_advanced(self.dockercontroller)
 
     def toggleContainer(self,arg):
         self.dockercontroller.toggleContainer(arg)
         self.redraw()
+
+    def new_classroom(self, name, image, port, admin, *args):
+        self.dockercontroller.new_classroom(name, image, port, admin)
+        self.redraw()
+    
+    def rmClassroom(self, id):
+        self.dockercontroller.delContainer(id)
+        self.redraw()   
 
 def main():
     root = tk.Tk()
